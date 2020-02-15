@@ -272,7 +272,7 @@ static void generate_AE(struct generator * g, struct node * p) {
             break;
         case c_len: /* Same as size() for Java. */
         case c_size:
-            w(g, "current.length()");
+            w(g, "limit");
             break;
     }
 }
@@ -1138,6 +1138,7 @@ static void generate_class_begin(struct generator * g) {
     w(g, " {~+~N"
          "~N"
          "~Mprivate static final long serialVersionUID = 1L;~N"
+         "~Mprivate static final java.lang.invoke.MethodHandles.Lookup methodObject = java.lang.invoke.MethodHandles.lookup();~N"
          "~N");
 }
 
@@ -1184,7 +1185,7 @@ static void generate_among_table(struct generator * g, struct among * x) {
             if (v->function != 0) {
                 w(g, ", \"");
                 write_varname(g, v->function);
-                w(g, "\", ~n.class");
+                w(g, "\", methodObject");
             }
             w(g, ")~S0~N");
             v++;
