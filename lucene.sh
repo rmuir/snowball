@@ -2,10 +2,13 @@
 # remove this script when problems are fixed
 # it assumes you have a lucene checkout in ../lucene-solr, if you don't, then fix that.
 # it also assumes you have a snowball-data checkout in ../snowball-data, fix that too
+# it also assumes you have a snowball-website checkout in ../snowball-website, fix that too
 SRCDIR=.
 DESTDIR=../lucene-solr/lucene/analysis/common/src/java/org/tartarus/snowball
 TESTSRCDIR=../snowball-data
 TESTDSTDIR=../lucene-solr/lucene/analysis/common/src/test/org/apache/lucene/analysis/snowball
+WWWSRCDIR=../snowball-website
+WWWDSTDIR=../lucene-solr/lucene/analysis/common/src/resources/org/apache/lucene/analysis/snowball/
 
 trap ': "*** BUILD FAILED ***" $BASH_SOURCE:$LINENO: error: "$BASH_COMMAND" returned $?' ERR
 set -eExuo pipefail
@@ -81,4 +84,30 @@ for file in ${TESTSRCDIR}/*; do
       rm -r ${tmpdir}
     fi
   fi
+done
+
+# regenerate stopwords data
+rm -f ${WWWDSTDIR}/*_stop.txt
+for file in ${WWWSRCDIR}/algorithms/*/stop.txt; do
+  language=$(basename $(dirname ${file}))
+  cat > ${WWWDSTDIR}/${language}_stop.txt << EOF
+ | From https://snowballstem.org/algorithms/${language}/stop.txt
+ | This file is distributed under the BSD License.
+ | See https://snowballstem.org/license.html
+ | Also see https://opensource.org/licenses/bsd-license.html
+ |  - Encoding was converted to UTF-8.
+ |  - This notice was added.
+ |
+ | NOTE: To use this file with StopFilterFactory, you must specify format="snowball"
+EOF
+  case "$language" in
+    danish)
+      # clear up some slight mojibake on the website. TODO: fix this file!
+      cat $file | sed 's/Ã¥/å/g' | sed 's/Ã¦/æ/g' >> ${WWWDSTDIR}/${language}_stop.txt
+      ;;
+    *)
+      # try to confirm its really UTF-8
+      iconv -f UTF-8 -t UTF-8 $file >> ${WWWDSTDIR}/${language}_stop.txt
+      ;;
+  esac
 done
