@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # remove this script when problems are fixed
 # it assumes you have a lucene checkout in ../lucene-solr, if you don't, then fix that.
+# it also assumes you have a snowball-data checkout in ../snowball-data, fix that too
+SRCDIR=.
 DESTDIR=../lucene-solr/lucene/analysis/common/src/java/org/tartarus/snowball
+TESTSRCDIR=../snowball-data
+TESTDSTDIR=../lucene-solr/lucene/analysis/common/src/test/org/apache/lucene/analysis/snowball
 
 trap ': "*** BUILD FAILED ***" $BASH_SOURCE:$LINENO: error: "$BASH_COMMAND" returned $?' ERR
 set -eExuo pipefail
@@ -25,19 +29,19 @@ EOF
 
 # generate stuff with existing makefile, just 'make' will try to do crazy stuff with e.g. python
 # and likely fail. so only ask for our specific target.
-make dist_libstemmer_java
+(cd ${SRCDIR} && make dist_libstemmer_java)
 
 for file in "SnowballStemmer.java" "Among.java" "SnowballProgram.java"; do
   # add license header to files since they have none, otherwise rat will flip the fuck out
   echo "/*" > ${DESTDIR}/${file}
-  cat COPYING >> ${DESTDIR}/${file}
+  cat ${SRCDIR}/COPYING >> ${DESTDIR}/${file}
   echo "*/" >> ${DESTDIR}/${file}
-  cat java/org/tartarus/snowball/${file} >> ${DESTDIR}/${file}
+  cat ${SRCDIR}/java/org/tartarus/snowball/${file} >> ${DESTDIR}/${file}
   reformat_java ${DESTDIR}/${file}
 done
 
 rm ${DESTDIR}/ext/*Stemmer.java
-for file in java/org/tartarus/snowball/ext/*.java; do
+for file in ${SRCDIR}/java/org/tartarus/snowball/ext/*.java; do
   # title-case the classes (fooStemmer -> FooStemmer) so they obey normal java conventions
   base=$(basename $file)
   oldclazz="${base%.*}"
@@ -49,4 +53,32 @@ for file in java/org/tartarus/snowball/ext/*.java; do
   fi
   cat $file | sed "s/${oldclazz}/${newclazz}/g" > ${DESTDIR}/ext/${newclazz}.java
   reformat_java ${DESTDIR}/ext/${newclazz}.java
+done
+
+# regenerate test data
+rm -f ${TESTDSTDIR}/test_languages.txt
+for file in ${TESTSRCDIR}/*; do
+  if [ -f "${file}/voc.txt" ] && [ -f "${file}/output.txt" ]; then
+    language=$(basename ${file})
+    if [ "${language}" == "kraaij_pohlmann" ]; then
+      language="kp"
+    fi
+    rm -f ${TESTDSTDIR}/${language}.zip
+    # make the .zip reproducible if data hasn't changed.
+    arbitrary_timestamp="200001010000"
+    # some test files are yuge, randomly sample up to this amount
+    row_limit="2000"
+    # TODO: for now don't deal with any special licenses
+    if [ ! -f "${file}/COPYING" ]; then
+      tmpdir=$(mktemp -d)
+      myrandom="openssl enc -aes-256-ctr -pass pass:${arbitrary_timestamp} -nosalt"
+      for data in "voc.txt" "output.txt"; do
+        shuf -n ${row_limit} --random-source=<(${myrandom} < /dev/zero 2>/dev/null) ${file}/${data} > ${tmpdir}/${data} \
+          && touch -t ${arbitrary_timestamp} ${tmpdir}/${data}
+      done
+      zip --junk-paths -X -9 ${TESTDSTDIR}/${language}.zip ${tmpdir}/voc.txt ${tmpdir}/output.txt
+      echo "${language}" >> ${TESTDSTDIR}/test_languages.txt
+      rm -r ${tmpdir}
+    fi
+  fi
 done
