@@ -941,9 +941,12 @@ static void generate_define(struct generator * g, struct node * p) {
      * be required to allow the SnowballProgram base class to invoke them.
      * FIXME: Is this avoidable?
      */
-    if (q->type == t_routine && !q->used_in_among) {
+    if (q->used_in_among) {
+        g->S[0] = "public";
+    } else if (q->type == t_routine) {
         g->S[0] = "private";
     } else {
+        w(g, "~N~M@Override");
         g->S[0] = "public";
     }
     g->V[0] = q;
